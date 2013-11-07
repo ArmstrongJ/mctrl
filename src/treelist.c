@@ -18,11 +18,14 @@
 
 #include "treelist.h"
 #include "theme.h"
+#include "strsafe.h"
 
+#ifndef INFOTIPSIZE
+#define INFOTIPSIZE 1024
+#endif
 
 /* TODO:
  *  -- Incremental search.
- *  -- Tooltips and style MC_TLS_NOTOOLTIPS.
  *  -- Handling state and style MC_TLS_CHECKBOXES.
  *  -- Support editing labels and style MC_TLS_EDITLABELS and related
  *     notifications.
@@ -185,6 +188,7 @@ struct treelist_tag {
     DWORD item_height_set       :  1;
     DWORD focus                 :  1;
     DWORD tracking_leave        :  1;
+    DWORD tooltip_active        :  1;
     DWORD displayed_items;
     WORD col_count;
     WORD item_height;
@@ -193,6 +197,8 @@ struct treelist_tag {
     int scroll_x;                     /* in pixels */
     int scroll_x_max;
     unsigned int selected_count;
+    POINT tooltip_location;
+    TCHAR *tooltip_text;
 };
 
 
@@ -1199,6 +1205,44 @@ skip_control_paint:
         SelectObject(dc, old_font);
 }
 
+/***************
+ *** Tooltip ***
+ ***************/
+
+static void
+tooltip_create(treelist_t* tl)
+{
+    tl->tooltip_win = mc_tooltip_create(tl->win, tl->notify_win, FALSE);
+    tl->tooltip_text = (TCHAR *)malloc(INFOTIPSIZE*sizeof(TCHAR));
+    if(tl->tooltip_text != NULL)
+        ZeroMemory(tl->tooltip_text, INFOTIPSIZE*sizeof(TCHAR));
+}
+
+static void
+tooltip_activate(treelist_t* tl, BOOL show)
+{
+    mc_tooltip_track_activate(tl->win, tl->tooltip_win, show);
+    tl->tooltip_active = show;
+}
+
+static void
+tooltip_update(treelist_t* tl, int x, int y)
+{
+    mc_tooltip_set_track_pos(tl->win, tl->tooltip_win, x, y);
+    mc_tooltip_set_text(tl->win, tl->tooltip_win, tl->tooltip_text);
+}
+
+static void
+tooltip_destroy(treelist_t* tl)
+{
+    if(tl->tooltip_win != NULL)
+        DestroyWindow(tl->tooltip_win);
+    tl->tooltip_win = NULL;
+    
+    if(tl->tooltip_text != NULL)
+        free(tl->tooltip_text);
+}
+
 static treelist_item_t*
 treelist_hit_test(treelist_t* tl, MC_TLHITTESTINFO* info)
 {
@@ -2042,6 +2086,11 @@ treelist_mouse_move(treelist_t* tl, int x, int y)
     info.pt.y = y;
     item = treelist_hit_test(tl, &info);
 
+    if(tl->tooltip_location.x != x || tl->tooltip_location.y != y) {
+        tooltip_activate(tl, FALSE);
+        mc_track_mouse(tl->win, TME_HOVER);
+    }
+
     /* Hot items only draw differently if we have themes, so... */
     if(tl->theme != NULL && mcIsThemePartDefined(tl->theme, TVP_TREEITEM, 0)) {
 
@@ -2072,9 +2121,77 @@ treelist_mouse_move(treelist_t* tl, int x, int y)
     }
 
     if(!tl->tracking_leave) {
-        mc_track_mouse(tl->win, TME_LEAVE);
+        mc_track_mouse(tl->win, TME_LEAVE | TME_HOVER);
         tl->tracking_leave = TRUE;
     }
+}
+
+static void 
+treelist_notify_infotip(treelist_t* tl, treelist_item_t* item)
+{
+    MC_NMTLGETINFOTIP info;
+    TCHAR *ret;
+    size_t cch;
+    
+    if(item == NULL) return;
+
+    info.hdr.hwndFrom = tl->win;
+    info.hdr.idFrom = GetWindowLong(tl->win, GWL_ID);
+    info.hdr.code = (tl->unicode_notifications ? MC_TLN_GETINFOTIPW : MC_TLN_GETINFOTIPA);
+    info.hItem = (MC_HTREELISTITEM) item;
+    info.lItemParam = item->lp;
+    if(tl->unicode_notifications) {
+        info.hdr.code = MC_TLN_GETINFOTIPW;
+        info.pszText = mc_str(tl->tooltip_text, MC_STRT, MC_STRW);
+        if(info.pszText != NULL)
+            info.pszText = (WCHAR *)realloc(info.pszText, INFOTIPSIZE*sizeof(WCHAR));
+        info.cchTextMax = info.pszText == NULL ? 0 : INFOTIPSIZE;
+    } else {
+        info.hdr.code = MC_TLN_GETINFOTIPA;
+        info.pszText = mc_str(tl->tooltip_text, MC_STRT, MC_STRA);
+        if(info.pszText != NULL)
+            info.pszText = (char *)realloc(info.pszText, INFOTIPSIZE*sizeof(char));
+        info.cchTextMax = info.pszText == NULL ? 0 : INFOTIPSIZE;
+    }
+    
+    MC_SEND(tl->notify_win, WM_NOTIFY, 0, &info);
+    
+    ret = mc_str(info.pszText, 
+                 info.hdr.code == MC_TLN_GETINFOTIPW ? MC_STRW : MC_STRA, MC_STRT);
+    ZeroMemory(tl->tooltip_text, INFOTIPSIZE*sizeof(TCHAR));
+    
+    if(ret != NULL) {
+        if(StringCchLength(ret, INFOTIPSIZE, &cch) == S_OK)
+            memcpy(tl->tooltip_text, ret, cch*sizeof(TCHAR));
+        free(ret);
+    }
+}
+
+static void
+treelist_mouse_hover(treelist_t* tl, int x, int y)
+{
+    MC_TLHITTESTINFO info;
+    treelist_item_t* item;
+    
+    /* If tooltips are disabled, exit now */
+    if(!(tl->style & MC_TLS_INFOTIP))
+        return;
+        
+    info.pt.x = x; tl->tooltip_location.x = x;
+    info.pt.y = y; tl->tooltip_location.y = y;
+    item = treelist_hit_test(tl, &info);
+    if(item == NULL && tl->tooltip_active) {
+        tooltip_activate(tl, FALSE);
+        return;
+    }
+    
+    treelist_notify_infotip(tl, item);
+    
+    if(tl->tooltip_text != NULL && _tcslen(tl->tooltip_text) != 0) {
+        tooltip_update(tl, x, y);
+        tooltip_activate(tl, TRUE);
+    } else
+        tooltip_activate(tl, FALSE);
 }
 
 static void
@@ -3399,6 +3516,8 @@ treelist_nccreate(HWND win, CREATESTRUCT* cs)
     tl->selected_from = NULL;
     tl->selected_last = NULL;
     tl->selected_count = 0;
+    
+    tl->tooltip_text = NULL;
 
     treelist_notify_format(tl);
 
@@ -3424,6 +3543,9 @@ treelist_create(treelist_t* tl)
         return -1;
     }
     MC_SEND(tl->header_win, HDM_SETUNICODEFORMAT, MC_IS_UNICODE, 0);
+    
+    if(tl->style & MC_TLS_INFOTIP)
+        tooltip_create(tl);
 
     tl->theme = mcOpenThemeData(tl->win, treelist_tc);
     return 0;
@@ -3432,6 +3554,12 @@ treelist_create(treelist_t* tl)
 static void
 treelist_destroy(treelist_t* tl)
 {
+    if(tl->tooltip_win != NULL) {
+        if(tl->tooltip_active) 
+            tooltip_activate(tl, FALSE);
+        tooltip_destroy(tl);
+    }
+    
     treelist_delete_item(tl, NULL);
 
     if(tl->theme) {
@@ -3615,6 +3743,10 @@ treelist_proc(HWND win, UINT msg, WPARAM wp, LPARAM lp)
 
         case WM_MOUSELEAVE:
             treelist_mouse_leave(tl);
+            return 0;
+
+        case WM_MOUSEHOVER:
+            treelist_mouse_hover(tl, GET_X_LPARAM(lp), GET_Y_LPARAM(lp));
             return 0;
 
         case WM_VSCROLL:

@@ -250,9 +250,11 @@ void MCTRL_API mcTreeList_Terminate(void);
  *  @details Note that only sibling items (i.e. items with the same parent item)
  *  can be selected at the same time. */
 #define MC_TLS_MULTISELECT          0x0800
+/** @brief Enables infotips.
+ *  @details Allows tooltips to be displayed on dwell. */
+#define MC_TLS_INFOTIP              0x1000
 
 #if 0 /* TODO */
-#define MC_TLS_NOTOOLTIPS           0x1000
 #define MC_TLS_CHECKBOXES           0x2000
 #define MC_TLS_EDITLABELS           0x4000
 #define MC_TLS_EDITSUBLABELS        0x8000
@@ -795,6 +797,39 @@ typedef struct MC_NMTLSUBDISPINFOA_tag {
     MC_TLSUBITEMA subitem;
 } MC_NMTLSUBDISPINFOA;
 
+/**
+ * @brief Structure used by notifications @c MC_TLN_GETINFOTIP 
+ * (ANSI variant).
+ */
+typedef struct MC_NMTLGETINFOTIPA_tag {
+    /** Common notification structure header. */
+    NMHDR hdr;
+    /** Handle specifying the item. */
+    MC_HTREELISTITEM hItem;
+    /** @c LPARAM of the item. */
+    LPARAM lItemParam;
+    /** String buffer to receive the infotip text. */
+    char *pszText;
+    /** Length of the buffer pointed to by pszText */
+    int cchTextMax;
+} MC_NMTLGETINFOTIPA;
+
+/**
+ * @brief Structure used by notifications @c MC_TLN_GETINFOTIP.
+ */
+typedef struct MC_NMTLGETINFOTIPW_tag {
+    /** Common notification structure header. */
+    NMHDR hdr;
+    /** Handle specifying the item. */
+    MC_HTREELISTITEM hItem;
+    /** @c LPARAM of the item. */
+    LPARAM lItemParam;
+    /** String buffer to receive the infotip text. */
+    WCHAR *pszText;
+    /** Length of the buffer pointed to by pszText */
+    int cchTextMax;
+} MC_NMTLGETINFOTIPW;
+
 /*@}*/
 
 
@@ -1290,6 +1325,9 @@ typedef struct MC_NMTLSUBDISPINFOA_tag {
 #define MC_TLN_GETSUBDISPINFOW       (MC_TLN_FIRST + 11)
 #define MC_TLN_GETSUBDISPINFOA       (MC_TLN_FIRST + 12)
 
+#define MC_TLN_GETINFOTIPW           (MC_TLN_FIRST + 13)
+#define MC_TLN_GETINFOTIPA           (MC_TLN_FIRST + 14)
+
 /*@}*/
 
 
@@ -1312,6 +1350,8 @@ typedef struct MC_NMTLSUBDISPINFOA_tag {
 #define MC_NMTLDISPINFO          MCTRL_NAME_AW(MC_NMTLDISPINFO)
 /** Unicode-resolution alias. @sa MC_NMTLSUBDISPINFOW MC_NMTLSUBDISPINFOA */
 #define MC_NMTLSUBDISPINFO       MCTRL_NAME_AW(MC_NMTLSUBDISPINFO)
+/** Unicode-resolution alias. @sa MC_NMTLSUBDISPINFOW MC_NMTLSUBDISPINFOA */
+#define MC_NMTLGETINFOTIP        MCTRL_NAME_AW(MC_NMTLGETINFOTIP)
 /** Unicode-resolution alias. @sa MC_TLM_SETCOLUMNW MC_TLM_SETCOLUMNA */
 #define MC_TLM_SETCOLUMN         MCTRL_NAME_AW(MC_TLM_SETCOLUMN)
 /** Unicode-resolution alias. @sa MC_TLM_INSERTCOLUMNW MC_TLM_INSERTCOLUMNA */
@@ -1338,6 +1378,8 @@ typedef struct MC_NMTLSUBDISPINFOA_tag {
 #define MC_TLN_SETSUBDISPINFO    MCTRL_NAME_AW(MC_TLN_SETSUBDISPINFO)
 /** Unicode-resolution alias. @sa MC_TLN_GETSUBDISPINFOW MC_TLN_GETSUBDISPINFOA */
 #define MC_TLN_GETSUBDISPINFO    MCTRL_NAME_AW(MC_TLN_GETSUBDISPINFO)
+/** Unicode-resolution alias. @sa MC_TLN_GETINFOTIPW MC_TLN_GETINFOTIPA */
+#define MC_TLN_GETINFOTIP        MCTRL_NAME_AW(MC_TLN_GETINFOTIP)
 
 /*@}*/
 
