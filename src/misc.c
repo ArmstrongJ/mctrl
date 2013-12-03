@@ -632,7 +632,7 @@ mc_tooltip_create(HWND parent, HWND notify, BOOL track)
     }
 
     info.cbSize = sizeof(TTTOOLINFO);
-    info.uFlags = TTF_IDISHWND | TTF_ABSOLUTE;
+    info.uFlags = TTF_IDISHWND | TTF_ABSOLUTE | TTF_TRANSPARENT;
     if(track)
         info.uFlags |= TTF_TRACK;
         

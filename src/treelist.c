@@ -2245,20 +2245,21 @@ treelist_left_button(treelist_t* tl, int x, int y, BOOL dblclick, WPARAM wp)
                 treelist_do_collapse(tl, item, TRUE);
             else
                 treelist_do_expand(tl, item, TRUE);
-        } else {
-            if(tl->style & MC_TLS_MULTISELECT) {
-                if(wp & MK_SHIFT) {
-                    treelist_set_sel_range(tl, item);
-                } else if(wp & MK_CONTROL) {
-                    treelist_toggle_sel(tl, item);
-                    tl->selected_from = item;
-                } else {
-                    treelist_set_sel(tl, item);
-                }
-            } else {
-                treelist_set_sel(tl, item);
-            }
-        }
+        } 
+	
+        if(tl->style & MC_TLS_MULTISELECT) {
+		if(wp & MK_SHIFT) {
+		    treelist_set_sel_range(tl, item);
+		} else if(wp & MK_CONTROL) {
+		    treelist_toggle_sel(tl, item);
+		    tl->selected_from = item;
+		} else {
+		    treelist_set_sel(tl, item);
+		}
+	} else {
+		treelist_set_sel(tl, item);
+	}
+
     } else if(info.flags & MC_TLHT_ONITEMBUTTON) {
         if(item->state & MC_TLIS_EXPANDED)
             treelist_do_collapse(tl, item, TRUE);
