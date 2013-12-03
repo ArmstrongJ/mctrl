@@ -1846,6 +1846,8 @@ treelist_set_sel_range(treelist_t* tl, treelist_item_t* item)
     treelist_sel_notify(tl, MC_TLN_SELCHANGED, NULL, NULL);
 }
 
+static void treelist_update_column_widths(treelist_t* tl);
+
 static int
 treelist_do_expand(treelist_t* tl, treelist_item_t* item, BOOL surely_displayed)
 {
@@ -1886,6 +1888,9 @@ treelist_do_expand(treelist_t* tl, treelist_item_t* item, BOOL surely_displayed)
         if(!tl->no_redraw)
             treelist_invalidate_item(tl, item, 0, exposed_items);
     }
+
+    /* Update column widths if necessary */
+    treelist_update_column_widths(tl);
 
     treelist_ensure_visible(tl, item, item->child_tail);
 
@@ -1942,9 +1947,12 @@ treelist_do_collapse(treelist_t* tl, treelist_item_t* item, BOOL surely_displaye
             treelist_invalidate_item(tl, item, 0, -hidden_items);
     }
 
+    /* Update column widths if necessary */
+    treelist_update_column_widths(tl);
+
     nm.hdr.code = MC_TLN_EXPANDED;
     MC_SEND(tl->notify_win, WM_NOTIFY, nm.hdr.idFrom, &nm);
-
+    
     return 0;
 }
 
@@ -2427,7 +2435,7 @@ treelist_key_down(treelist_t* tl, int key)
 }
 
 static int
-treelist_setup_header_item(HDITEM* header_item, const MC_TLCOLUMN* col)
+treelist_setup_header_item(treelist_t *tl, HDITEM* header_item, const MC_TLCOLUMN* col)
 {
     if(MC_ERR(col->fMask & ~MC_TLCF_ALL)) {
         MC_TRACE("treelist_setup_header_item: Unsupported column mask "
@@ -2448,7 +2456,7 @@ treelist_setup_header_item(HDITEM* header_item, const MC_TLCOLUMN* col)
         header_item->mask |= HDI_FORMAT;
     }
 
-    if(col->fMask & MC_TLCF_WIDTH) {
+    if(col->fMask & MC_TLCF_WIDTH && !(tl->style & MC_TLS_COLUMNAUTOSIZE)) {
         header_item->cxy = col->cx;
         header_item->mask |= HDI_WIDTH;
     }
@@ -2499,7 +2507,7 @@ treelist_insert_column(treelist_t* tl, int col_ix, const MC_TLCOLUMN* col,
     }
 
     /* Insert new header item */
-    if(MC_ERR(treelist_setup_header_item(&header_item, col) != 0)) {
+    if(MC_ERR(treelist_setup_header_item(tl, &header_item, col) != 0)) {
         MC_TRACE("treelist_insert_column: treelist_setup_header_item() failed.");
         return -1;
     }
@@ -2578,7 +2586,7 @@ treelist_set_column(treelist_t* tl, int col_ix, const MC_TLCOLUMN* col,
 
     TREELIST_TRACE("treelist_set_column(%p, %d, %p, %d)", tl, col_ix, col, unicode);
 
-    if(MC_ERR(treelist_setup_header_item(&header_item, col) != 0)) {
+    if(MC_ERR(treelist_setup_header_item(tl, &header_item, col) != 0)) {
         MC_TRACE("treelist_insert_column: treelist_setup_header_item() failed.");
         return FALSE;
     }
@@ -2594,6 +2602,101 @@ treelist_set_column(treelist_t* tl, int col_ix, const MC_TLCOLUMN* col,
      * there. */
 
     return TRUE;
+}
+
+static int treelist_calc_item_width(treelist_t* tl, HDC dc, treelist_item_t *item, int col_ix, int level)
+{
+int ret;
+int img_w, img_h;
+RECT label_rect;
+treelist_dispinfo_t di;
+treelist_subdispinfo_t sdi;
+TCHAR* text;
+
+    ret = 2*ITEM_PADDING_H; /* Start and end */
+    if(col_ix == 0) {
+        
+        ret += level * tl->item_indent + ITEM_PADDING_H;
+        if(tl->style & MC_TLS_LINESATROOT)
+            ret += tl->item_indent + ITEM_PADDING_H;
+        
+        if(tl->imglist_normal) {
+            ImageList_GetIconSize(tl->imglist_normal, &img_w, &img_h);
+            ret += img_w + ITEM_PADDING_H;
+        }
+        
+        treelist_get_dispinfo(tl, item, &di, MC_TLIF_TEXT);
+        
+        text = di.text;
+        
+    } else {
+        treelist_get_subdispinfo(tl, item, col_ix, &sdi, MC_TLIF_TEXT);
+    
+        text = sdi.text;
+    }
+            
+    /* Calculate label rectangle */
+    label_rect.left = 0; label_rect.top = 0;
+    label_rect.right = 0; label_rect.bottom = 0;
+    if(text != NULL) {
+        DrawText(dc, text, -1, &label_rect, DT_CALCRECT | (ITEM_DTFLAGS & ~DT_END_ELLIPSIS));
+        ret += (label_rect.right - label_rect.left);
+    } else {
+        ret += EMPTY_SELECT_WIDTH;
+    }
+                        
+    
+    
+    return ret;
+}
+
+static void treelist_update_column_width(treelist_t* tl, int col_ix)
+{
+int one_row, ret;
+int level;
+treelist_item_t *item;
+HDITEM header_item;
+BOOL ok;
+HDC dc;
+HFONT old_font;
+
+    /* Warning - expensive */
+    if(!(tl->style & MC_TLS_COLUMNAUTOSIZE))
+        return;
+
+    dc = GetDCEx(tl->win, NULL, DCX_CACHE);
+    old_font = GetCurrentObject(dc, OBJ_FONT);
+    if(tl->font)
+        SelectObject(dc, tl->font);
+
+    /* Cycle through all items to find max width */
+    item = tl->root_head;
+    level = 0;
+    ret = EMPTY_SELECT_WIDTH;
+    while(item != NULL) {
+        one_row = treelist_calc_item_width(tl, dc, item, col_ix, level);
+        if(one_row > ret)
+            ret = one_row;
+        item = item_next_displayed(item, &level);
+    }
+    
+    header_item.mask = HDI_WIDTH;
+    header_item.cxy = ret;
+    ok = MC_SEND(tl->header_win, HDM_SETITEM, col_ix, &header_item);
+    if(MC_ERR(!ok)) {
+        MC_TRACE("treelist_update_column_width(%d): HDM_GETITEM failed.", col_ix);
+    }
+    
+    SelectObject(dc, old_font);
+    ReleaseDC(NULL, dc);
+}
+
+static void treelist_update_column_widths(treelist_t* tl)
+{
+int col_ix;
+
+    for(col_ix = 0; col_ix < tl->col_count; col_ix++)
+        treelist_update_column_width(tl, col_ix);
 }
 
 static BOOL
@@ -2885,6 +2988,9 @@ treelist_insert_item(treelist_t* tl, MC_TLINSERTSTRUCT* insert, BOOL unicode)
         }
     }
 
+    /* Update column widths if necessary */
+    treelist_update_column_widths(tl);
+
     /* Success */
     return item;
 
@@ -2970,6 +3076,9 @@ treelist_set_item(treelist_t* tl, treelist_item_t* item, MC_TLITEM* item_data,
         item->children = (item_data->cChildren != 0);
         item->children_callback = (item_data->cChildren == MC_I_CHILDRENCALLBACK);
     }
+
+    /* Update column widths if necessary */
+    treelist_update_column_widths(tl);
 
     if(!tl->no_redraw)
         treelist_invalidate_item(tl, item, 0, 0);
@@ -3219,6 +3328,9 @@ treelist_delete_item(treelist_t* tl, treelist_item_t* item)
         }
     }
 
+    /* Update column widths if necessary */
+    treelist_update_column_widths(tl);
+
     /* Parent may need to repaint column 0 without expand button. */
     if(!tl->no_redraw  &&  parent != NULL  &&
        parent->child_head == NULL  &&  parent->child_tail == NULL)
@@ -3335,6 +3447,9 @@ treelist_set_subitem(treelist_t* tl, treelist_item_t* item,
             free(item->subitems[subitem_data->iSubItem]);
         item->subitems[subitem_data->iSubItem] = text;
     }
+
+    /* Update column widths if necessary */
+    treelist_update_column_widths(tl);
 
     if(!tl->no_redraw)
         treelist_invalidate_item(tl, item, subitem_data->iSubItem, 0);
@@ -3638,6 +3753,9 @@ treelist_proc(HWND win, UINT msg, WPARAM wp, LPARAM lp)
 
         case MC_TLM_SETCOLUMNWIDTH:
         {
+            if(tl->style & MC_TLS_COLUMNAUTOSIZE)
+                return 0;
+                
             MC_TLCOLUMN col;
             col.fMask = MC_TLCF_WIDTH;
             col.cx = lp;
@@ -3808,6 +3926,7 @@ treelist_proc(HWND win, UINT msg, WPARAM wp, LPARAM lp)
             tl->font = (HFONT) wp;
             MC_SEND(tl->header_win, WM_SETFONT, wp, lp);
             treelist_set_item_height(tl, -1, (BOOL) lp);
+            treelist_update_column_widths(tl);
             return 0;
 
         case WM_SETREDRAW:

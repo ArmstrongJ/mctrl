@@ -253,11 +253,14 @@ void MCTRL_API mcTreeList_Terminate(void);
 /** @brief Enables infotips.
  *  @details Allows tooltips to be displayed on dwell. */
 #define MC_TLS_INFOTIP              0x1000
+/** @brief Autosize columns
+ *  @details Allows the columns of the treelist to size automatically */
+#define MC_TLS_COLUMNAUTOSIZE       0x2000
 
 #if 0 /* TODO */
-#define MC_TLS_CHECKBOXES           0x2000
-#define MC_TLS_EDITLABELS           0x4000
-#define MC_TLS_EDITSUBLABELS        0x8000
+#define MC_TLS_CHECKBOXES           0x4000
+#define MC_TLS_EDITLABELS           0x8000
+#define MC_TLS_EDITSUBLABELS        0x10000
 #endif
 
 /*@}*/
