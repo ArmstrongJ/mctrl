@@ -332,6 +332,13 @@ void MCTRL_API mcTreeList_Terminate(void);
  */
 #define MC_TLI_LAST  ((MC_HTREELISTITEM)(ULONG_PTR) -0xfffe)
 
+/**
+ * @brief Special handle referring to sorting when inserting
+ * @details Can be used only where explicitly allowed.
+ * @sa MC_TLM_INSERTITEM
+ */
+#define MC_TLI_SORT  ((MC_HTREELISTITEM)(ULONG_PTR) -0xfffd)
+
 /*@}*/
 
 
@@ -697,6 +704,21 @@ typedef struct MC_TLHITTESTINFO_tag {
      *  item itself). */
     int iSubItem;
 } MC_TLHITTESTINFO;
+
+/**
+ * @brief Function definition for sorting treelist items
+ */
+typedef int (*MC_PFNTLCOMPARE)( HWND, MC_HTREELISTITEM, MC_HTREELISTITEM );
+
+/**
+ * @brief Structure for message @ref MC_MTM_SORTCHILDRENCB.
+ */
+typedef struct MC_TLSORTCB_tag {
+    /** Parent MC_HTREELISTITEM whose children will be sorted */
+    MC_HTREELISTITEM hParent;
+    /** The compare function that will be called */
+    MC_PFNTLCOMPARE lpfnCompare;
+} MC_TLSORTCB;
 
 /**
  * @brief Structure used by many control notifications.
@@ -1191,6 +1213,24 @@ typedef struct MC_NMTLGETINFOTIPW_tag {
  * @return (@c int) The number of items selected.
  */
 #define MC_TLM_GETSELECTEDCOUNT     (MC_TLM_FIRST + 33)
+
+/**
+ * @brief Sorts the treelist item's children using lstrcmpi
+ *
+ * @param wParam If TRUE, recurse during sort.
+ * @param lParam The parent item where to start the sort.
+ * @return (@c int) TRUE if successful, or FALSE otherwise.
+ */
+#define MC_TLM_SORTCHILDREN     (MC_TLM_FIRST + 34)
+
+/**
+ * @brief Sorts the treelist item's children using a custom callback
+ *
+ * @param wParam If TRUE, recurse during sort.
+ * @param lParam Pointer to a MC_TLSORTCB structure
+ * @return (@c int) TRUE if successful, or FALSE otherwise.
+ */
+#define MC_TLM_SORTCHILDRENCB   (MC_TLM_FIRST + 35)
 
 /*@}*/
 

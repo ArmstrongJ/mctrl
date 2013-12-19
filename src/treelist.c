@@ -20,6 +20,9 @@
 #include "theme.h"
 #include "strsafe.h"
 
+#include <stdlib.h>
+#include <search.h>
+
 #ifndef INFOTIPSIZE
 #define INFOTIPSIZE 1024
 #endif
@@ -700,6 +703,165 @@ treelist_scrolled_item(treelist_t* tl, int* level)
 
     *level = tl->scrolled_level;
     return tl->scrolled_item;
+}
+
+/* MinGW does not provide this prototype in its headers, but it does import
+ * it from the C runtime.  We can declare it here explicitly.
+ */
+#ifdef __GNUC__
+void qsort_s(
+   void *base,
+   size_t num,
+   size_t width,
+   int (__cdecl *compare )(void *, const void *, const void *),
+   void * context
+);
+#endif
+
+/* To avoid any need for users to worry about __cdecl, we'll wrap the treelist
+ * sort in a much nicer interface.
+ */
+struct _tlcompare {
+    MC_PFNTLCOMPARE f;
+    HWND win;
+};
+
+/* This routine is the actual sort comparison function.  The first parameter
+ * wil be the structure that contains the handle to the current window and
+ * the user-supplied comparison function.  The other two items are pointers
+ * to MC_HTREELISTITEM's, which we'll dereference for the user's function.
+ */
+static int __cdecl 
+treelist_qsort_compare(void *f, const void *item1, const void *item2)
+{
+const MC_HTREELISTITEM *hItem1;
+const MC_HTREELISTITEM *hItem2;
+struct _tlcompare *tlcomp;
+
+    tlcomp = (struct _tlcompare *)f;
+    hItem1 = (MC_HTREELISTITEM *)item1;
+    hItem2 = (MC_HTREELISTITEM *)item2;
+    
+    return tlcomp->f(tlcomp->win, *hItem1, *hItem2);
+}
+
+static BOOL
+treelist_do_sort(treelist_t* tl, MC_TLSORTCB *params, BOOL recurse)
+{
+treelist_item_t *base;
+treelist_item_t *head;
+treelist_item_t *next;
+treelist_item_t **array;
+struct _tlcompare tlcomp;
+int count, i;
+    
+    base = (treelist_item_t *)params->hParent;
+    
+    if(base == NULL)
+        head = tl->root_head;
+    else {
+        if(base ==  MC_TLI_ROOT)
+            base = tl->root_head;
+        head = base->child_head;
+    }
+    
+    /* Count the elements necessary */
+    count = 0;
+    next = head;
+    while(next != NULL) {
+        count++;
+        next = next->sibling_next;
+    }
+    
+    if(count < 2) return TRUE;
+    
+    /* Push everything into an array for sort */
+    array = (treelist_item_t **)malloc(count*sizeof(treelist_item_t *));
+    if(array == NULL) return FALSE;
+    next = head;
+    for(i = 0; i < count && next != NULL; i++) {
+        array[i] = next;
+        next = next->sibling_next;
+    }
+    
+    /* Perform the sort */
+    tlcomp.f = params->lpfnCompare;
+    tlcomp.win = tl->win;
+    qsort_s(array, count, sizeof(treelist_item_t *), treelist_qsort_compare, (void *)&tlcomp);
+    
+    /* Reconstruct the tree now */
+    if(base != NULL)
+        base->child_head = array[0];
+    array[0]->sibling_prev = NULL;
+    
+    next = head = array[0];
+    for(i = 1; i < count; i++) {
+        treelist_invalidate_item(tl, next, -1, -1);
+        
+        next->sibling_next = array[i];
+        array[i]->sibling_prev = next;
+        next = array[i];
+    }
+    next->sibling_next = NULL;
+    if(base != NULL)
+        base->child_tail = next;
+        
+    free(array);
+    
+    if(recurse) {
+        next = head;
+        while(next != NULL) {
+            if(next->child_head != NULL) {
+                params->hParent = next;
+                treelist_do_sort(tl, params, TRUE);
+            }
+            next = next->sibling_next;
+        }
+    }
+    
+    return TRUE;
+}
+
+static int 
+treelist_alphasort_comparator(HWND hTree, MC_HTREELISTITEM item1, 
+                              MC_HTREELISTITEM item2)
+{
+MC_TLITEMW tlitem1, tlitem2;
+int ret;
+
+    if(item1 == NULL || item2 == NULL) return 0;
+
+    tlitem1.fMask = MC_TLIF_TEXT;
+    tlitem1.pszText = (WCHAR *)malloc(256*sizeof(WCHAR));
+    tlitem1.cchTextMax = 256;
+    tlitem2.fMask = MC_TLIF_TEXT;
+    tlitem2.pszText = (WCHAR *)malloc(256*sizeof(WCHAR));
+    tlitem2.cchTextMax = 256;
+    
+    if(tlitem1.pszText == NULL || tlitem2.pszText == NULL) return 0;
+    
+    if(!SendMessage(hTree, MC_TLM_GETITEMW, (WPARAM)item1, (LPARAM)&tlitem1) ||
+       !SendMessage(hTree, MC_TLM_GETITEMW, (WPARAM)item2, (LPARAM)&tlitem2))
+    {
+        return 0;
+    }
+    
+    ret = lstrcmpiW(tlitem1.pszText, tlitem2.pszText);
+    free(tlitem1.pszText);
+    free(tlitem2.pszText);
+    
+    return ret;
+}
+
+static BOOL 
+treelist_do_alphasort(treelist_t* tl, MC_HTREELISTITEM hParent, BOOL recurse)
+{
+MC_TLSORTCB params;
+
+    params.hParent = hParent;
+    params.lpfnCompare = treelist_alphasort_comparator;
+    
+    return treelist_do_sort(tl, &params, recurse);
 }
 
 static void
@@ -2158,7 +2320,7 @@ treelist_notify_infotip(treelist_t* tl, treelist_item_t* item)
         info.hdr.code = MC_TLN_GETINFOTIPA;
         info.pszText = mc_str(tl->tooltip_text, MC_STRT, MC_STRA);
         if(info.pszText != NULL)
-            info.pszText = (char *)realloc(info.pszText, INFOTIPSIZE*sizeof(char));
+            info.pszText = (TCHAR *)realloc(info.pszText, INFOTIPSIZE*sizeof(char));
         info.cchTextMax = info.pszText == NULL ? 0 : INFOTIPSIZE;
     }
     
@@ -3843,6 +4005,12 @@ treelist_proc(HWND win, UINT msg, WPARAM wp, LPARAM lp)
 
         case MC_TLM_GETSELECTEDCOUNT:
             return (LRESULT)tl->selected_count;
+            
+        case MC_TLM_SORTCHILDREN:
+            return treelist_do_alphasort(tl, (MC_HTREELISTITEM) lp, (BOOL) wp);
+            
+        case MC_TLM_SORTCHILDRENCB:
+            return treelist_do_sort(tl, (MC_TLSORTCB *) lp, (BOOL) wp);
 
         case WM_NOTIFY:
             if(((NMHDR*)lp)->hwndFrom == tl->header_win)
