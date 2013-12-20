@@ -2319,8 +2319,8 @@ treelist_notify_infotip(treelist_t* tl, treelist_item_t* item)
     ZeroMemory(tl->tooltip_text, INFOTIPSIZE*sizeof(TCHAR));
     
     if(ret != NULL) {
-        if(StringCchLength(ret, INFOTIPSIZE, &cch) == S_OK)
-            memcpy(tl->tooltip_text, ret, cch*sizeof(TCHAR));
+        if(StringCchLength(ret, INFOTIPSIZE-1, &cch) == S_OK)
+        	StringCbCopy(tl->tooltip_text, INFOTIPSIZE*sizeof(TCHAR), ret);
         free(ret);
     }
 }
@@ -2344,7 +2344,7 @@ treelist_mouse_hover(treelist_t* tl, int x, int y)
     }
     
     treelist_notify_infotip(tl, item);
-    
+
     if(tl->tooltip_text != NULL && _tcslen(tl->tooltip_text) != 0) {
         tooltip_update(tl, x, y);
         tooltip_activate(tl, TRUE);

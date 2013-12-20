@@ -679,10 +679,10 @@ mc_tooltip_set_track_pos(HWND parent, HWND tooltip, int x, int y)
 
     info.cbSize = sizeof(TTTOOLINFO);
     info.hwnd = parent;
-
-    size = MC_SEND(tooltip, TTM_GETBUBBLESIZE, 0, &info);
-    pt.x = x - LOWORD(size) / 2;
-    pt.y = y - HIWORD(size) - 5;
+    
+    //size = MC_SEND(tooltip, TTM_GETBUBBLESIZE, 0, &info);
+    pt.x = x; // - LOWORD(size) / 2;
+    pt.y = y; // - HIWORD(size) - 5;
     ClientToScreen(parent, &pt);
     MC_SEND(tooltip, TTM_TRACKPOSITION, 0, MAKELPARAM(pt.x, pt.y));
 }
