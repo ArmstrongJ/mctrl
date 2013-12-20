@@ -705,19 +705,6 @@ treelist_scrolled_item(treelist_t* tl, int* level)
     return tl->scrolled_item;
 }
 
-/* MinGW does not provide this prototype in its headers, but it does import
- * it from the C runtime.  We can declare it here explicitly.
- */
-#ifdef __GNUC__
-void qsort_s(
-   void *base,
-   size_t num,
-   size_t width,
-   int (__cdecl *compare )(void *, const void *, const void *),
-   void * context
-);
-#endif
-
 /* To avoid any need for users to worry about __cdecl, we'll wrap the treelist
  * sort in a much nicer interface.
  */
@@ -787,7 +774,8 @@ int count, i;
     /* Perform the sort */
     tlcomp.f = params->lpfnCompare;
     tlcomp.win = tl->win;
-    qsort_s(array, count, sizeof(treelist_item_t *), treelist_qsort_compare, (void *)&tlcomp);
+    /* This sort routine isn't available on XP... */
+    /* qsort_s(array, count, sizeof(treelist_item_t *), treelist_qsort_compare, (void *)&tlcomp); */
     
     /* Reconstruct the tree now */
     if(base != NULL)
