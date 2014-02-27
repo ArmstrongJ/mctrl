@@ -3230,9 +3230,10 @@ treelist_set_item(treelist_t* tl, treelist_item_t* item, MC_TLITEM* item_data,
     /* Update column widths if necessary */
     treelist_update_column_widths(tl);
 
-    if(!tl->no_redraw)
-        treelist_invalidate_item(tl, item, 0, 0);
-
+    if(!tl->no_redraw) {
+        if(item_is_displayed(item))
+            treelist_invalidate_item(tl, item, 0, 0);
+    }
     return TRUE;
 }
 
@@ -3718,20 +3719,23 @@ treelist_header_notify(treelist_t* tl, NMHEADER* info)
 
                 MC_SEND(tl->header_win, HDM_GETITEMRECT, info->iItem, &header_item_rect);
                 old_width = mc_width(&header_item_rect);
+                
+                if(new_width != old_width) {
+                    tl->scroll_x_max += new_width - old_width;
+                    treelist_setup_scrollbars(tl);
 
-                tl->scroll_x_max += new_width - old_width;
-                treelist_setup_scrollbars(tl);
-
-                if(!tl->no_redraw) {
-                    RECT rect;
-                    GetClientRect(tl->win, &rect);
-                    rect.left = header_item_rect.right + ITEM_PAINT_MARGIN_H;
-                    rect.top = mc_height(&header_item_rect);
-                    ScrollWindowEx(tl->win, new_width - old_width, 0, &rect, &rect,
-                                   NULL, NULL, SW_ERASE | SW_INVALIDATE);
-                    treelist_invalidate_column(tl, info->iItem);
-                    if(tl->style & MC_TLS_FULLROWSELECT)
-                        treelist_invalidate_selected(tl, -1, 0);
+                    if(!tl->no_redraw) {
+                        RECT rect;
+                        GetClientRect(tl->win, &rect);
+                        rect.left = header_item_rect.right + ITEM_PAINT_MARGIN_H;
+                        rect.top = mc_height(&header_item_rect);
+                        ScrollWindowEx(tl->win, new_width - old_width, 0, &rect, &rect,
+                                       NULL, NULL, SW_ERASE | SW_INVALIDATE);
+                        
+                        treelist_invalidate_column(tl, info->iItem);
+                        if(tl->style & MC_TLS_FULLROWSELECT)
+                            treelist_invalidate_selected(tl, -1, 0);
+                    }
                 }
             }
             return FALSE;
