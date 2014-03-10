@@ -758,7 +758,7 @@ static void mc_swap(void *a_, void *b_, size_t size)
 }
 
 void mc_qsort_r(void *base_, size_t nmemb, size_t size, void *thunk,
-		        int (*compar)(void *, const void *, const void *))
+		        int CALLBACK (*compar)(void *, const void *, const void *))
 {
     char *base = (char *) base_;
     if (nmemb < 10) /* use O(nmemb^2) algorithm for small enough nmemb */

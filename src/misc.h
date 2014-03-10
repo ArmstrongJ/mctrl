@@ -560,6 +560,6 @@ void mc_tooltip_set_text(HWND parent, HWND tooltip, const TCHAR* str);
  ************************/
 
 void mc_qsort_r(void *base_, size_t nmemb, size_t size, void *thunk,
-		        int (*compar)(void *, const void *, const void *));
+		        int CALLBACK (*compar)(void *, const void *, const void *));
 
 #endif  /* MC_MISC_H  */

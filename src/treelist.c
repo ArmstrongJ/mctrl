@@ -718,7 +718,7 @@ struct _tlcompare {
  * the user-supplied comparison function.  The other two items are pointers
  * to MC_HTREELISTITEM's, which we'll dereference for the user's function.
  */
-static int __cdecl 
+static int CALLBACK 
 treelist_qsort_compare(void *f, const void *item1, const void *item2)
 {
 const MC_HTREELISTITEM *hItem1;
@@ -813,7 +813,7 @@ int count, i;
     return TRUE;
 }
 
-static int 
+static int CALLBACK
 treelist_alphasort_comparator(HWND hTree, MC_HTREELISTITEM item1, 
                               MC_HTREELISTITEM item2)
 {

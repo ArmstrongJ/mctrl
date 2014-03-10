@@ -708,7 +708,7 @@ typedef struct MC_TLHITTESTINFO_tag {
 /**
  * @brief Function definition for sorting treelist items
  */
-typedef int (*MC_PFNTLCOMPARE)( HWND, MC_HTREELISTITEM, MC_HTREELISTITEM );
+typedef int CALLBACK (*MC_PFNTLCOMPARE)( HWND, MC_HTREELISTITEM, MC_HTREELISTITEM );
 
 /**
  * @brief Structure for message @ref MC_MTM_SORTCHILDRENCB.
