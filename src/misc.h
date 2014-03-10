@@ -555,4 +555,11 @@ void mc_tooltip_set_track_pos(HWND parent, HWND tooltip, int x, int y);
 /* Update the text of a tooltip */
 void mc_tooltip_set_text(HWND parent, HWND tooltip, const TCHAR* str);
 
+/************************
+ *** Portable Sorting ***
+ ************************/
+
+void mc_qsort_r(void *base_, size_t nmemb, size_t size, void *thunk,
+		        int (*compar)(void *, const void *, const void *));
+
 #endif  /* MC_MISC_H  */

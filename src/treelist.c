@@ -774,8 +774,11 @@ int count, i;
     /* Perform the sort */
     tlcomp.f = params->lpfnCompare;
     tlcomp.win = tl->win;
+    
     /* This sort routine isn't available on XP... */
     /* qsort_s(array, count, sizeof(treelist_item_t *), treelist_qsort_compare, (void *)&tlcomp); */
+    
+    mc_qsort_r(array, count, sizeof(treelist_item_t *), (void *)&tlcomp, treelist_qsort_compare);
     
     /* Reconstruct the tree now */
     if(base != NULL)
